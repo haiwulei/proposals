@@ -612,11 +612,7 @@ The wallet MUST strictly use the transaction fields above and always use <code>n
 
 ====Accounts====
 
-A response carries exactly one signature, so <code>signMessage</code> is defined for single-signature accounts only. A wallet MUST reject a request for a multi-signature account or a deployed contract account with <code>UNSUPPORTED</code>, and MUST fail with <code>NOTFOUND</code> when it holds no private key for the requested account.
-
-The signing data depends only on <code>messageBytes</code> and the selected mode, not on the account, so every co-signer of a multi-signature account produces a signature over identical data. A dApp that needs the authorization of a multi-signature account therefore asks each co-signer to sign the same message with their own single-signature account, and combines the responses until the threshold of the account is reached. The threshold and the set of public keys are properties of the account rather than of any single response, so this combination is done by the dApp and is verified as described below.
-
-Deployed contract accounts remain out of scope, because their authorization is decided by contract execution rather than by signatures over the payload.
+A response carries exactly one signature, so <code>signMessage</code> is defined for single-signature accounts only. A wallet MUST reject a request for a multi-signature account or a deployed contract account with <code>UNSUPPORTED</code>, and MUST fail with <code>NOTFOUND</code> when it holds no private key for the requested account. Authorization of an account that is not a single-signature account is established by a witness on a transaction and is outside the scope of this method.
 
 ====Verification====
 
@@ -625,14 +621,6 @@ Both modes return the signature as standard Base64 encoding of <code>r || s</cod
 The verifier MUST reconstruct the signing data from the expected original message and the selected mode, compare it byte for byte with the decoded <code>payload</code>, and then verify the signature over that data using SHA-256 and ECDSA-P256 with the returned <code>pubkey</code>. The fields of the returned <code>SignedMessage</code> are untrusted input and MUST NOT be used in place of the expected message, mode or account.
 
 A valid signature only proves possession of the private key of <code>pubkey</code>. To bind the signature to an account, the verifier MUST derive the account of <code>pubkey</code>, that is the hash of the standard single-signature verification script of that public key, and MUST require the derived account to equal the expected account. A response whose <code>account</code> field differs from the derived account MUST be rejected.
-
-=====Multi-signature accounts=====
-
-A multi-signature account is authorized by a set of responses instead of a single one. The verifier MUST know the standard multi-signature verification script of the account, that is its threshold <code>m</code> and its public keys, and MUST require the hash of that script to equal the expected account.
-
-The account is authorized only when the verifier holds at least <code>m</code> responses that carry the same <code>payload</code>, are each valid on their own as a single-signature response, and were produced by <code>m</code> different public keys of the script. A response whose public key is not contained in the script contributes nothing, and a public key MUST NOT be counted more than once. The order in which the responses were collected is not significant.
-
-An account whose verification script is neither of these two standard forms, including a deployed contract account, MUST NOT be authorized in this way. Such accounts are authorized by a witness on a transaction, which is outside the scope of this method.
 
 ===Errors===
 
