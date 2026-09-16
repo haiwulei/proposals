@@ -1,0 +1,12 @@
+{
+  "name": "NEO Enhancement Proposals (NEPs)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "preview",
+      "command": "bash .cursor/preview.sh"
+    }
+  ],
+  "ports": [8000]
+}
