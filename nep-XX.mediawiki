@@ -1,0 +1,49 @@
+<pre>
+  NEP: <to be assigned>
+  Title: Message Signing Standard
+  Author: haiwulei
+  Type: Standard
+  Status: Draft
+  Created: 2026-09-29
+</pre>
+
+==Abstract==
+
+This NEP defines a common Neo N3 message-signing format, separate from transaction signing.
+
+==Motivation==
+
+Different message formats make wallet signatures incompatible. A common format makes message signing interoperable across implementations.
+
+==Specification==
+
+The keywords MUST, MUST NOT, and MAY indicate requirements as defined in RFC 2119.
+
+===Message encoding===
+
+The caller supplies a string <code>message</code> and an optional boolean <code>isBase64Encoded</code>, defaulting to <code>false</code>:
+
+* <code>false</code>: encode as UTF-8 without normalization, whitespace changes, or added bytes. Reject unpaired surrogates.
+* <code>true</code>: decode canonical standard Base64 ([https://www.rfc-editor.org/rfc/rfc4648 RFC 4648], Section 4), including required padding and zero pad bits. Reject input whose re-encoding differs from the supplied string.
+
+Invalid input types MUST be rejected. Empty messages and arbitrary Base64-decoded bytes are permitted. The encoding flag is not signed; equivalent bytes produce the same payload.
+
+===Signing===
+
+Construct the following, where <code>||</code> denotes byte concatenation:
+
+<pre>
+PREFIX = UTF8("Neo N3 Signed Message / NEP-21 / v1\n")
+P = PREFIX || UInt64LE(byteLength(messageBytes)) || messageBytes
+signature = ECDSA_P256_SignDigest(privateKey, SHA256(P))
+</pre>
+
+The fixed prefix is 36 bytes, ending in LF (<code>0x0a</code>). The length is an eight-byte unsigned little-endian byte count.
+
+The trusted signer MUST construct <code>P</code>, even if the message already contains a prefix. Callers MUST NOT bypass framing or submit a digest instead. Apply SHA-256 exactly once: an ECDSA interface that hashes internally receives <code>P</code>, not <code>SHA256(P)</code>.
+
+ECDSA uses secp256r1 (NIST P-256). Encode the signature as <code>r || s</code>: two 32-byte big-endian integers, retaining leading zeros, for a total of 64 bytes.
+
+==Rationale==
+
+The prefix and length separate message signatures from transactions: <code>P</code> starts with an invalid N3 transaction version and is at least 44 bytes, unlike the 36-byte transaction signing data.
