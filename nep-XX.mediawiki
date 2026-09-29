@@ -1,6 +1,6 @@
 <pre>
   NEP: <to be assigned>
-  Title: Message Signing Standard
+  Title: Signed Data Standard
   Author: haiwulei
   Type: Standard
   Status: Draft
@@ -9,41 +9,58 @@
 
 ==Abstract==
 
-This NEP defines a common Neo N3 message-signing format, separate from transaction signing.
+This NEP defines a versioned <code>signed_data</code> format for off-chain signatures in Neo N3.
 
 ==Motivation==
 
-Different message formats make wallet signatures incompatible. A common format makes message signing interoperable across implementations.
+Without a distinct signing format, a caller could submit transaction signing data as a message and obtain a signature usable for a valid transaction. This standard separates message signatures from transaction signatures and provides a common format that can be extended to structured data.
 
 ==Specification==
 
-The keywords MUST, MUST NOT, and MAY indicate requirements as defined in RFC 2119.
+The keywords MUST and MUST NOT indicate requirements as defined in RFC 2119.
 
-===Message encoding===
+===Signed data format===
 
-The caller supplies a string <code>message</code> and an optional boolean <code>isBase64Encoded</code>, defaulting to <code>false</code>:
+The format is:
 
-* <code>false</code>: encode as UTF-8 without normalization, whitespace changes, or added bytes. Reject unpaired surrogates.
-* <code>true</code>: decode canonical standard Base64 ([https://www.rfc-editor.org/rfc/rfc4648 RFC 4648], Section 4), including required padding and zero pad bits. Reject input whose re-encoding differs from the supplied string.
+<pre>
+signed_data = PREFIX || version || version_data || data
+PREFIX = UTF8("Neo N3 Signed Message / NEP-21 / ")
+</pre>
 
-Invalid input types MUST be rejected. Empty messages and arbitrary Base64-decoded bytes are permitted. The encoding flag is not signed; equivalent bytes produce the same payload.
+Here <code>||</code> denotes byte concatenation. The fixed prefix is 33 bytes, including its trailing space. <code>version</code> is one byte and determines the format of <code>version_data</code> and <code>data</code>.
+
+===Version bytes===
+
+{| class="wikitable"
+! Version !! Meaning
+|-
+| <code>0x01</code> || Arbitrary byte data.
+|-
+| All other values || Unassigned; reserved for future formats, including structured data.
+|}
+
+Unassigned versions MUST be rejected. This NEP defines only version <code>0x01</code>.
+
+====Version 0x01====
+
+<code>data</code> is an arbitrary byte sequence, which may be empty. Its interpretation and encoding are outside this standard. The version-specific field is its byte length, encoded as an eight-byte unsigned little-endian integer:
+
+<pre>
+version_data = UInt64LE(byteLength(data))
+signed_data = PREFIX || 0x01 || version_data || data
+</pre>
+
+The trusted signer MUST construct <code>signed_data</code> from the original data, even if it already contains a prefix. Framing MUST NOT be bypassed.
 
 ===Signing===
 
-Construct the following, where <code>||</code> denotes byte concatenation:
-
 <pre>
-PREFIX = UTF8("Neo N3 Signed Message / NEP-21 / v1\n")
-P = PREFIX || UInt64LE(byteLength(messageBytes)) || messageBytes
-signature = ECDSA_P256_SignDigest(privateKey, SHA256(P))
+signature = ECDSA_P256_SignDigest(privateKey, SHA256(signed_data))
 </pre>
 
-The fixed prefix is 36 bytes, ending in LF (<code>0x0a</code>). The length is an eight-byte unsigned little-endian byte count.
-
-The trusted signer MUST construct <code>P</code>, even if the message already contains a prefix. Callers MUST NOT bypass framing or submit a digest instead. Apply SHA-256 exactly once: an ECDSA interface that hashes internally receives <code>P</code>, not <code>SHA256(P)</code>.
-
-ECDSA uses secp256r1 (NIST P-256). Encode the signature as <code>r || s</code>: two 32-byte big-endian integers, retaining leading zeros, for a total of 64 bytes.
+Apply SHA-256 exactly once before ECDSA on secp256r1 (NIST P-256). An ECDSA interface that hashes internally receives <code>signed_data</code> directly.
 
 ==Rationale==
 
-The prefix and length separate message signatures from transactions: <code>P</code> starts with an invalid N3 transaction version and is at least 44 bytes, unlike the 36-byte transaction signing data.
+The prefix starts with <code>0x4e</code>, which is not a valid N3 transaction version. Version <code>0x01</code> produces at least 42 bytes, distinct from the 36-byte transaction signing data. The signed version byte separates formats and allows future versions to define structured-data signing without changing this version.
